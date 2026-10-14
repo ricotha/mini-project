@@ -6,7 +6,7 @@
 
 - **Course:** Foundation of Computer Programming
 
-- **Built with:** Python 3.15.0 & Tkinter
+- **Built with:** Python 3.15.0 & TKinter
 
 ---
 
