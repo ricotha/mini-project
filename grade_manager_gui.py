@@ -1,24 +1,18 @@
-"""
-Student Grade Manager (Tkinter GUI Version)
-Python Mini Project
-"""
-
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# =====================================================
-# Data structures
-# =====================================================
-SUBJECTS = ["Python", "Math", "Law", "English", "Finance"]  # list
+# Import data structures, Student class, and file handling from student module
+from student import (
+    SUBJECTS,
+    GRADE_POINTS,
+    FILE_NAME,
+    score_to_grade,
+    Student,
+    save_students,
+    load_students,
+    find_student,
+)
 
-GRADE_POINTS = {"A": 4.0, "B+": 3.5, "B": 3.0, "C+": 2.5,
-                "C": 2.0, "D+": 1.5, "D": 1.0, "F": 0.0}    # dict
-
-FILE_NAME = "students.txt"
-
-# =====================================================
-# Color theme (professional style: navy + blue + soft colors)
-# =====================================================
 NAVY = "#1F3A5F"        # banner, table heading
 BLUE = "#2E6DA4"        # main buttons
 BLUE_DARK = "#245889"
@@ -42,126 +36,7 @@ GRADE_COLORS = {"A": "#E3F4E8",   # light green
                 "D": "#FBE9E0",   # light orange
                 "F": "#FBE4E4"}   # light red
 
-
-# =====================================================
-# Function: score -> grade
-# =====================================================
-def score_to_grade(score):
-    """Convert a score (0-100) to a letter grade."""
-    if score >= 80:
-        return "A"
-    elif score >= 75:
-        return "B+"
-    elif score >= 70:
-        return "B"
-    elif score >= 65:
-        return "C+"
-    elif score >= 60:
-        return "C"
-    elif score >= 55:
-        return "D+"
-    elif score >= 50:
-        return "D"
-    else:
-        return "F"
-
-
-# =====================================================
-# Object-Oriented Programming: Student class
-# =====================================================
-class Student:
-    def __init__(self, student_id, name, scores):
-        self.student_id = student_id   # text, e.g. "6907012660059"
-        self.name = name               # text, e.g. "RICO"
-        self.scores = scores           # list of 5 numbers
-
-    def average(self):
-        """Average of all scores."""
-        return sum(self.scores) / len(self.scores)
-
-    def grade(self):
-        """Letter grade from the average."""
-        return score_to_grade(self.average())
-
-    def gpa(self):
-        """GPA = average of grade points (all subjects have equal credit)."""
-        total = 0
-        for score in self.scores:
-            total += GRADE_POINTS[score_to_grade(score)]
-        return total / len(self.scores)
-
-    def card_text(self):
-        """Return the report card as text (shown in a popup window)."""
-        border = "+" + "-" * 30 + "+"
-        divider = "|" + "-" * 30 + "|"
-        lines = [border,
-                 "|" + "REPORT CARD".center(30) + "|",
-                 divider,
-                 "| Name : " + self.name.ljust(22)[:22] + "|",
-                 "| ID   : " + self.student_id.ljust(22)[:22] + "|",
-                 divider]
-        for i in range(len(SUBJECTS)):
-            text = f" {SUBJECTS[i]:<12}{self.scores[i]:>5}{score_to_grade(self.scores[i]):>8}"
-            lines.append("|" + text.ljust(30) + "|")
-        lines.append(divider)
-        lines.append("|" + f" Average : {self.average():.2f}".ljust(30) + "|")
-        lines.append("|" + f" GPA     : {self.gpa():.2f}".ljust(30) + "|")
-        lines.append("|" + f" Result  : {self.grade()}".ljust(30) + "|")
-        lines.append(border)
-        return "\n".join(lines)
-
-    def to_line(self):
-        """Make one line of text to save in the file."""
-        text = self.student_id + "," + self.name
-        for score in self.scores:
-            text = text + "," + str(score)
-        return text
-
-
-# =====================================================
-# File handling
-# =====================================================
-def save_students(students):
-    """Write all students to the file (one student per line)."""
-    with open(FILE_NAME, "w") as file:
-        for student in students:
-            file.write(student.to_line() + "\n")
-
-
-def load_students():
-    """Read students from the file.
-    Return (list of Student, warning text). Warning is "" if all is fine."""
-    students = []
-    warning = ""
-    try:
-        with open(FILE_NAME, "r") as file:
-            for line in file:
-                line = line.strip()
-                if line == "":
-                    continue
-                parts = line.split(",")          # ["001", "RICO", "88", ...]
-                scores = []
-                for text in parts[2:]:
-                    scores.append(int(text))
-                students.append(Student(parts[0], parts[1], scores))
-    except FileNotFoundError:
-        warning = ""                              # first run: no file yet, this is OK
-    except ValueError:
-        warning = "The file has wrong data. Some students were not loaded."
-    return students, warning
-
-
-def find_student(students, student_id):
-    """Return the Student with this ID, or None if not found."""
-    for student in students:
-        if student.student_id == student_id:
-            return student
-    return None
-
-
-# =====================================================
 # GUI class
-# =====================================================
 class StudentApp:
     def __init__(self, root):
         self.root = root
@@ -172,6 +47,8 @@ class StudentApp:
         self.students, warning = load_students()   # list of Student objects
         self.score_entries = {}                    # dict: subject -> Entry box
         self.status = tk.StringVar()               # text in the status bar
+        self.current_filter = None                 # active grade filter (e.g. "A", "B", etc.)
+        self.current_sort = None                   # active sort mode (e.g. "high_to_low", etc.)
 
         self.setup_styles()
         self.build_banner()
@@ -188,6 +65,14 @@ class StudentApp:
     # ---------- Colors and styles ----------
     def make_button_style(self, style, name, color, hover):
         """Create one colored button style."""
+        style.configure(name, background=color, foreground=WHITE,
+                        font=("Helvetica", 11, "bold"), padding=(14, 6),
+                        borderwidth=0, focusthickness=0)
+        style.map(name, background=[("active", hover), ("pressed", hover)],
+                  foreground=[("active", WHITE)])
+
+    def make_menubutton_style(self, style, name, color, hover):
+        """Create one colored menubutton style."""
         style.configure(name, background=color, foreground=WHITE,
                         font=("Helvetica", 11, "bold"), padding=(14, 6),
                         borderwidth=0, focusthickness=0)
@@ -223,6 +108,11 @@ class StudentApp:
         self.make_button_style(style, "Neutral.TButton", GRAY, GRAY_DARK)
         self.make_button_style(style, "Gold.TButton", GOLD, GOLD_DARK)
         self.make_button_style(style, "Navy.TButton", NAVY, BLUE_DARK)
+
+        # colored menubuttons (dropdown buttons)
+        self.make_menubutton_style(style, "Gold.TMenubutton", GOLD, GOLD_DARK)
+        self.make_menubutton_style(style, "Neutral.TMenubutton", GRAY, GRAY_DARK)
+        self.make_menubutton_style(style, "Primary.TMenubutton", BLUE, BLUE_DARK)
 
     # ---------- Build the window ----------
     def build_banner(self):
@@ -269,12 +159,12 @@ class StudentApp:
                    command=self.clear_form).pack(side="left", padx=5)
 
     def build_search_bar(self):
-        """Search box and buttons."""
-        frame = ttk.LabelFrame(self.root, text="Search", padding=12)
+        """Search box, Filter button, and Sort by dropdown button."""
+        frame = ttk.LabelFrame(self.root, text="Search & Filter", padding=12)
         frame.pack(fill="x", padx=15, pady=6)
 
         ttk.Label(frame, text="Name or ID:").pack(side="left", padx=5)
-        self.search_entry = ttk.Entry(frame, width=25)
+        self.search_entry = ttk.Entry(frame, width=20)
         self.search_entry.pack(side="left", padx=5)
         self.search_entry.bind("<Return>", lambda event: self.search_student())
 
@@ -282,8 +172,47 @@ class StudentApp:
                    command=self.search_student).pack(side="left", padx=5)
         ttk.Button(frame, text="Show All", style="Neutral.TButton",
                    command=self.show_all).pack(side="left", padx=5)
-        ttk.Button(frame, text="Top Student", style="Gold.TButton",
-                   command=self.show_top_student).pack(side="left", padx=5)
+
+        # Filter button with dropdown menu
+        self.filter_btn = ttk.Menubutton(frame, text="Filter ▾", style="Neutral.TMenubutton")
+        filter_menu = tk.Menu(self.filter_btn, tearoff=0, font=("Helvetica", 11),
+                              bg=WHITE, fg=TEXT, activebackground=BLUE, activeforeground=WHITE)
+        filter_menu.add_command(label="All Grades", command=lambda: self.apply_filter(None, "All"))
+        filter_menu.add_separator()
+        filter_menu.add_command(label="Grade A  (80-100)", command=lambda: self.apply_filter("A", "Grade A"))
+        filter_menu.add_command(label="Grade B+ / B  (70-79)", command=lambda: self.apply_filter("B", "Grade B"))
+        filter_menu.add_command(label="Grade C+ / C  (60-69)", command=lambda: self.apply_filter("C", "Grade C"))
+        filter_menu.add_command(label="Grade D+ / D  (50-59)", command=lambda: self.apply_filter("D", "Grade D"))
+        filter_menu.add_command(label="Grade F  (0-49)", command=lambda: self.apply_filter("F", "Grade F"))
+        self.filter_btn.configure(menu=filter_menu)
+        self.filter_btn.pack(side="left", padx=5)
+
+        # "Sort by " button containing all requested sort modes
+        self.sort_btn = ttk.Menubutton(frame, text="Sort by ▾", style="Gold.TMenubutton")
+        sort_menu = tk.Menu(self.sort_btn, tearoff=0, font=("Helvetica", 11),
+                            bg=WHITE, fg=TEXT, activebackground=BLUE, activeforeground=WHITE)
+        sort_menu.add_command(label="Highest to Lowest",
+                              command=lambda: self.apply_sort("high_to_low", "Highest to Lowest"))
+        sort_menu.add_command(label="Lowest to Highest",
+                              command=lambda: self.apply_sort("low_to_high", "Lowest to Highest"))
+        sort_menu.add_separator()
+        sort_menu.add_command(label="A - Z",
+                              command=lambda: self.apply_sort("a_z", "A - Z"))
+        sort_menu.add_command(label="Z - A",
+                              command=lambda: self.apply_sort("z_a", "Z - A"))
+        sort_menu.add_separator()
+        sort_menu.add_command(label="New to Old (Latest Added)",
+                              command=lambda: self.apply_sort("new_to_old", "New to Old"))
+        sort_menu.add_command(label="Old to New (First Added)",
+                              command=lambda: self.apply_sort("old_to_new", "Old to New"))
+        sort_menu.add_separator()
+        sort_menu.add_command(label="0 to 1 (ID Ascending)",
+                              command=lambda: self.apply_sort("0_to_1", "0 to 1"))
+        sort_menu.add_command(label="1 to 0 (ID Descending)",
+                              command=lambda: self.apply_sort("1_to_0", "1 to 0"))
+        self.sort_btn.configure(menu=sort_menu)
+        self.sort_btn.pack(side="left", padx=5)
+
         ttk.Button(frame, text="Report Card", style="Navy.TButton",
                    command=self.show_card).pack(side="left", padx=5)
 
@@ -403,6 +332,66 @@ class StudentApp:
             entry.delete(0, "end")
             entry.insert(0, str(student.scores[i]))
 
+    def get_displayed_students(self):
+        """Return the list of students according to current search, filter, and sort."""
+        result = list(self.students)
+
+        # 1. Search keyword filter
+        keyword = self.search_entry.get().strip().lower()
+        if keyword != "":
+            result = [s for s in result if keyword in s.name.lower() or keyword in s.student_id.lower()]
+
+        # 2. Grade filter
+        if self.current_filter is not None:
+            result = [s for s in result if s.grade().startswith(self.current_filter)]
+
+        # 3. Sort options
+        if self.current_sort == "high_to_low":
+            result.sort(key=lambda s: (s.average(), s.gpa()), reverse=True)
+        elif self.current_sort == "low_to_high":
+            result.sort(key=lambda s: (s.average(), s.gpa()), reverse=False)
+        elif self.current_sort == "a_z":
+            result.sort(key=lambda s: s.name.upper(), reverse=False)
+        elif self.current_sort == "z_a":
+            result.sort(key=lambda s: s.name.upper(), reverse=True)
+        elif self.current_sort == "new_to_old":
+            id_order = {s.student_id: i for i, s in enumerate(self.students)}
+            result.sort(key=lambda s: id_order.get(s.student_id, 0), reverse=True)
+        elif self.current_sort == "old_to_new":
+            id_order = {s.student_id: i for i, s in enumerate(self.students)}
+            result.sort(key=lambda s: id_order.get(s.student_id, 0), reverse=False)
+        elif self.current_sort == "0_to_1":
+            result.sort(key=lambda s: s.student_id, reverse=False)
+        elif self.current_sort == "1_to_0":
+            result.sort(key=lambda s: s.student_id, reverse=True)
+
+        return result
+
+    def apply_filter(self, grade_letter, label):
+        """Filter the table by letter grade."""
+        self.current_filter = grade_letter
+        if grade_letter is None:
+            self.filter_btn.configure(text="Filter ▾")
+        else:
+            self.filter_btn.configure(text=f"Filter: {label} ▾")
+
+        displayed = self.get_displayed_students()
+        self.refresh_table(displayed)
+
+        if grade_letter is None:
+            self.status.set(f"Showing all grades ({len(displayed)} student(s)).")
+        else:
+            self.status.set(f"Filtered by {label} ({len(displayed)} student(s) found).")
+
+    def apply_sort(self, sort_mode, label):
+        """Sort the current student table."""
+        self.current_sort = sort_mode
+        self.sort_btn.configure(text=f"Sort: {label} ▾")
+
+        displayed = self.get_displayed_students()
+        self.refresh_table(displayed)
+        self.status.set(f"Sorted by {label} ({len(displayed)} student(s)).")
+
     def add_student(self):
         data = self.read_form()
         if data is None:
@@ -415,7 +404,7 @@ class StudentApp:
 
         self.students.append(Student(student_id, name, scores))
         save_students(self.students)
-        self.refresh_table(self.students)
+        self.refresh_table(self.get_displayed_students())
         self.clear_form()
         self.status.set("Added " + name + ". Total students: " + str(len(self.students)))
 
@@ -434,7 +423,7 @@ class StudentApp:
         student.name = name
         student.scores = scores
         save_students(self.students)
-        self.refresh_table(self.students)
+        self.refresh_table(self.get_displayed_students())
         self.clear_form()
         self.status.set("Updated " + name + ".")
 
@@ -448,7 +437,7 @@ class StudentApp:
         if messagebox.askyesno("Delete", "Delete " + student.name + "?"):
             self.students.remove(student)
             save_students(self.students)
-            self.refresh_table(self.students)
+            self.refresh_table(self.get_displayed_students())
             self.clear_form()
             self.status.set("Deleted " + student.name + ". Total students: " + str(len(self.students)))
 
@@ -458,35 +447,26 @@ class StudentApp:
             messagebox.showinfo("Search", "Please type a name or ID.")
             return
 
-        result = []
-        for student in self.students:
-            if keyword in student.name.lower() or keyword in student.student_id.lower():
-                result.append(student)
-
-        if len(result) == 0:
+        displayed = self.get_displayed_students()
+        if len(displayed) == 0:
             messagebox.showinfo("Search", "No student found.")
             return
 
-        self.refresh_table(result)
-        self.status.set("Found " + str(len(result)) + " student(s).")
+        self.refresh_table(displayed)
+        self.status.set("Found " + str(len(displayed)) + " student(s).")
 
     def show_all(self):
         self.search_entry.delete(0, "end")
+        self.current_filter = None
+        self.current_sort = None
+        self.filter_btn.configure(text="Filter ▾")
+        self.sort_btn.configure(text="Sort by ▾")
         self.refresh_table(self.students)
         self.status.set("Showing all " + str(len(self.students)) + " student(s).")
 
     def show_top_student(self):
-        if len(self.students) == 0:
-            messagebox.showinfo("Top Student", "No students yet.")
-            return
-
-        best = self.students[0]
-        for student in self.students:
-            if student.average() > best.average():
-                best = student
-
-        self.refresh_table([best])
-        self.status.set("Top student: " + best.name + " (average " + f"{best.average():.2f}" + ")")
+        """Show all students sorted from highest to lowest score."""
+        self.apply_sort("high_to_low", "Highest to Lowest")
 
     def show_card(self, event=None):
         """Open a popup window with the report card of the selected student."""
@@ -509,13 +489,12 @@ class StudentApp:
                    command=popup.destroy).pack(pady=(0, 15))
 
 
-# =====================================================
 # Main program
-# =====================================================
 def main():
     root = tk.Tk()
     StudentApp(root)
     root.mainloop()
 
 
-main()
+if __name__ == "__main__":
+    main()
